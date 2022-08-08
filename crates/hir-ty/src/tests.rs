@@ -9,6 +9,7 @@ mod macros;
 mod display_source_code;
 mod incremental;
 mod diagnostics;
+mod layout;
 
 use std::{collections::HashMap, env, sync::Arc};
 
@@ -62,34 +63,47 @@ fn setup_tracing() -> Option<tracing::subscriber::DefaultGuard> {
 }
 
 fn check_types(ra_fixture: &str) {
-    check_impl(ra_fixture, false, true, false)
+    check_impl(ra_fixture, false, true, false, false)
+}
+
+fn check_layout(ra_fixture: &str) {
+    check_impl(ra_fixture, false, false, true, false)
 }
 
 fn check_types_source_code(ra_fixture: &str) {
-    check_impl(ra_fixture, false, true, true)
+    check_impl(ra_fixture, false, true, false, true)
 }
 
 fn check_no_mismatches(ra_fixture: &str) {
-    check_impl(ra_fixture, true, false, false)
+    check_impl(ra_fixture, true, false, false, false)
 }
 
 fn check(ra_fixture: &str) {
-    check_impl(ra_fixture, false, false, false)
+    check_impl(ra_fixture, false, false, false, false)
 }
 
-fn check_impl(ra_fixture: &str, allow_none: bool, only_types: bool, display_source: bool) {
+fn check_impl(
+    ra_fixture: &str,
+    allow_none: bool,
+    only_types: bool,
+    only_layouts: bool,
+    display_source: bool,
+) {
     let _tracing = setup_tracing();
     let (db, files) = TestDB::with_many_files(ra_fixture);
 
     let mut had_annotations = false;
     let mut mismatches = HashMap::new();
     let mut types = HashMap::new();
+    let mut layouts = HashMap::new();
     let mut adjustments = HashMap::<_, Vec<_>>::new();
     for (file_id, annotations) in db.extract_annotations() {
         for (range, expected) in annotations {
             let file_range = FileRange { file_id, range };
             if only_types {
                 types.insert(file_range, expected);
+            } else if only_layouts {
+                layouts.insert(file_range, expected);
             } else if expected.starts_with("type: ") {
                 types.insert(file_range, expected.trim_start_matches("type: ").to_string());
             } else if expected.starts_with("expected") {
@@ -153,6 +167,13 @@ fn check_impl(ra_fixture: &str, allow_none: bool, only_types: bool, display_sour
                 } else {
                     ty.display_test(&db).to_string()
                 };
+                assert_eq!(actual, expected);
+            }
+            if let Some(expected) = layouts.remove(&range) {
+                let actual = db.ty_layout(ty.clone()).map_or_else(
+                    || "error".to_string(),
+                    |layout| layout.display_test().to_string(),
+                );
                 assert_eq!(actual, expected);
             }
         }
@@ -237,6 +258,12 @@ fn check_impl(ra_fixture: &str, allow_none: bool, only_types: bool, display_sour
         format_to!(buf, "Unchecked type annotations:\n");
         for t in types {
             format_to!(buf, "{:?}: type {}\n", t.0.range, t.1);
+        }
+    }
+    if !layouts.is_empty() {
+        format_to!(buf, "Unchecked layout annotations:\n");
+        for l in layouts {
+            format_to!(buf, "{:?}: layout {}\n", l.0.range, l.1);
         }
     }
     if !adjustments.is_empty() {
@@ -507,6 +534,40 @@ fn check_infer_with_mismatches(ra_fixture: &str, expect: Expect) {
     actual.push('\n');
     expect.assert_eq(&actual);
 }
+
+/*
+fn check_layout(content: &str) {
+    let (db, files) = TestDB::with_single_file(content);
+
+    let mut had_annotations = false;
+    let mut layouts = HashMap::new();
+    for (file_id, annotations) in db.extract_annotations() {
+        for (range, expected) in annotations {
+            let file_range = FileRange { file_id, range };
+            layouts.insert(file_range, expected);
+            had_annotations = true;
+        }
+    }
+    assert!(had_annotations, "No `//^` annotations found");
+
+    for file_id in files {
+        let module = db.module_for_file(file_id);
+        let def_map = module.def_map(&db);
+        let local_module_id = module.local_id;
+        let module_data = def_map[module.local_id];
+        for decl in module_data.scope.declarations() {
+            match decl {
+                ModuleDefId::AdtId(adt_id) => match adt_id {
+                    AdtId::StructId(id) => db.struct_data(id).name
+                    AdtId::UnionId(_) => todo!(),
+                    AdtId::EnumId(_) => todo!(),
+                },
+                _ => continue,
+            }
+        }
+    }
+}
+*/
 
 #[test]
 fn salsa_bug() {

@@ -20,6 +20,7 @@ mod mapping;
 mod tls;
 mod utils;
 mod walk;
+mod layout;
 pub mod db;
 pub mod diagnostics;
 pub mod display;
@@ -53,6 +54,7 @@ pub use infer::{
     InferenceResult,
 };
 pub use interner::Interner;
+pub use layout::TyLayout;
 pub use lower::{
     associated_type_shorthand_candidates, CallableDefId, ImplTraitLoweringMode, TyDefId,
     TyLoweringContext, ValueTyDefId,

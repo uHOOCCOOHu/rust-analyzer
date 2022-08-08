@@ -55,6 +55,7 @@ use hir_def::{
     TraitId, TypeAliasId, TypeOrConstParamId, TypeParamId, UnionId,
 };
 use hir_expand::{name::name, MacroCallKind};
+use hir_ty::TyLayout;
 use hir_ty::{
     all_super_traits, autoderef,
     consteval::{unknown_const_as_generic, ComputedExpr, ConstEvalError, ConstExt},
@@ -3346,6 +3347,10 @@ impl Type {
             }),
             _ => None,
         }
+    }
+
+    pub fn layout(&self, db: &dyn HirDatabase) -> Option<TyLayout> {
+        db.ty_layout(self.ty.clone())
     }
 }
 

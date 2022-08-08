@@ -16,7 +16,7 @@ use crate::{
     consteval::{ComputedExpr, ConstEvalError},
     method_resolution::{InherentImpls, TraitImpls, TyFingerprint},
     Binders, CallableDefId, FnDefId, GenericArg, ImplTraitId, InferenceResult, Interner, PolyFnSig,
-    QuantifiedWhereClause, ReturnTypeImplTraits, TraitRef, Ty, TyDefId, ValueTyDefId,
+    QuantifiedWhereClause, ReturnTypeImplTraits, TraitRef, Ty, TyDefId, TyLayout, ValueTyDefId,
 };
 use hir_expand::name::Name;
 
@@ -171,6 +171,14 @@ pub trait HirDatabase: DefDatabase + Upcast<dyn DefDatabase> {
         krate: CrateId,
         env: chalk_ir::Environment<Interner>,
     ) -> chalk_ir::ProgramClauses<Interner>;
+
+    #[salsa::invoke(crate::layout::ty_layout_query)]
+    #[salsa::cycle(crate::layout::ty_layout_recover)]
+    fn ty_layout(&self, ty: Ty) -> Option<TyLayout>;
+
+    #[salsa::invoke(crate::layout::ty_is_sized_query)]
+    #[salsa::cycle(crate::layout::ty_is_sized_recover)]
+    fn ty_is_sized(&self, ty: Ty) -> Option<bool>;
 }
 
 fn infer_wait(db: &dyn HirDatabase, def: DefWithBodyId) -> Arc<InferenceResult> {
